@@ -13,7 +13,6 @@ if "run" not in st.session_state:
     st.session_state.run = False
 
 # ── 2) Sidebar: Simulation & Reset ──────────────────────────────────────────
-st.sidebar.header("Aktionen")
 if st.sidebar.button("▶️ Simulation starten"):
     st.session_state.run = True
 if st.sidebar.button("🔄 Neue Eingabe"):
@@ -22,24 +21,29 @@ if st.sidebar.button("🔄 Neue Eingabe"):
     st.experimental_rerun()
 
 # ── 3) Sidebar: Input-Dateien & Systemparameter ─────────────────────────────
-st.sidebar.markdown("---")
+st.sidebar.markdown("### Datei-Uploads")
 price_file = st.sidebar.file_uploader(
     "Strommarktpreise hochladen\n(1. Spalte Zeitstempel, 2. Spalte Preis €/MWh)",
-    type=["csv", "xls", "xlsx"],
-    key="price_file"
+    type=["csv", "xls", "xlsx"], key="price_file"
 )
 pv_file = st.sidebar.file_uploader(
     "PV-Lastgang hochladen\n(1. Spalte Zeitstempel, 2. Spalte Einspeisung kWh)",
-    type=["csv", "xls", "xlsx"],
-    key="pv_file"
+    type=["csv", "xls", "xlsx"], key="pv_file"
 )
 
-st.sidebar.markdown("---")
+st.sidebar.markdown("### Eingaben")
 start_soc  = st.sidebar.number_input("Start-SoC (kWh)",       0.0, 1e6, 0.0, step=1.0)
 cap        = st.sidebar.number_input("Kapazität (kWh)",       0.0, 1e6, 4472.0, step=1.0)
 bat_kw     = st.sidebar.number_input("Batterieleistung (kW)", 0.0, 1e6, 559.0, step=1.0)
 grid_kw    = st.sidebar.number_input("Netzanschlussleistung (kW)", 0.0, 1e6, 757.5, step=1.0)
-eff_pct    = st.sidebar.slider("Round-Trip Efficiency (%)", 0, 100, 91) / 100.0
+eff_pct = st.sidebar.slider(
+    "Round-Trip Efficiency (%)",
+    min_value=0.0,
+    max_value=100.0,
+    value=91.0,
+    step=0.1,
+    format="%.1f"
+) / 100.0
 max_cycles = st.sidebar.number_input("Zyklen/Jahr", 0.0, 1e4, 548.0, step=1.0)
 
 # ── 4) Abbruch, wenn nicht gestartet oder Dateien fehlen ────────────────────
@@ -164,6 +168,43 @@ c3.metric(
     "Verlust durch PV",
     f"-€{abs(loss_abs):,.2f}",
     f"{-loss_pct:.2f}%"
+)
+
+# ── 11) Kennzahlen ──────────────────────────────────────────────────────────
+loss_abs = obj_n - obj_w
+loss_pct = abs(loss_abs) / obj_n * 100 if obj_n != 0 else 0.0
+c1, c2, c3 = st.columns(3)
+c1.metric("Gewinn ohne PV", f"€{obj_n:,.2f}")
+c2.metric("Gewinn mit PV",   f"€{obj_w:,.2f}")
+c3.metric(
+    "Verlust durch PV",
+    f"-€{abs(loss_abs):,.2f}",
+    f"{-loss_pct:.2f}%"
+)
+
+# ── 11b) Chart: Kumulierte Tageserlöse ───────────────────────────────────────
+# 1) Viertelstundenerlöse berechnen
+rev_w = prices * dh_w - prices * ch_w
+rev_n = prices * dh_n - prices * ch_n
+
+# 2) DataFrame mit Tages­-Datum
+df_daily = pd.DataFrame({
+    "Datum":    timestamps.dt.floor("D"),
+    "mit PV":   rev_w,
+    "ohne PV":  rev_n
+})
+
+# 3) Summe pro Tag und kumulativ
+daily_sum = df_daily.groupby("Datum").sum().sort_index()
+daily_sum["Kum. ohne PV"] = daily_sum["ohne PV"].cumsum()
+daily_sum["Kum. mit PV"]  = daily_sum["mit PV"].cumsum()
+
+# 4) Chart ausgeben
+st.subheader("Kumulierte Tageserlöse")
+st.line_chart(
+    daily_sum[["Kum. ohne PV", "Kum. mit PV"]],
+    height=400,
+    use_container_width=True
 )
 
 # ── 12) Ergebnis-Tabelle & Download ─────────────────────────────────────────
