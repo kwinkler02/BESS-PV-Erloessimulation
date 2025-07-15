@@ -13,7 +13,7 @@ if "run" not in st.session_state:
     st.session_state.run = False
 
 # ── 2) Sidebar: Simulation & Reset ──────────────────────────────────────────
-st.sidebar.markdown("### Datei-Uploads")
+st.sidebar.markdown("### Aktionen")
 if st.sidebar.button("▶️ Simulation starten"):
     st.session_state.run = True
 if st.sidebar.button("🔄 Neue Eingabe"):
@@ -166,18 +166,6 @@ with st.spinner("Berechne mit PV…"):
 with st.spinner("Berechne ohne PV…"):
     obj_n, ch_n, dh_n, soc_n = solve_arbitrage(np.zeros(T), 50, 90)
 set_progress(100)
-
-# ── 11) Kennzahlen ──────────────────────────────────────────────────────────
-loss_abs = obj_n - obj_w
-loss_pct = abs(loss_abs) / obj_n * 100 if obj_n != 0 else 0.0
-c1, c2, c3 = st.columns(3)
-c1.metric("Gewinn ohne PV", f"€{obj_n:,.2f}")
-c2.metric("Gewinn mit PV",   f"€{obj_w:,.2f}")
-c3.metric(
-    "Verlust durch PV",
-    f"-€{abs(loss_abs):,.2f}",
-    f"{-loss_pct:.2f}%"
-)
 
 # ── 11) Kennzahlen ──────────────────────────────────────────────────────────
 loss_abs = obj_n - obj_w
