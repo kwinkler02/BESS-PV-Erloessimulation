@@ -21,6 +21,7 @@ if st.sidebar.button("🔄 Neue Eingabe"):
     st.experimental_rerun()
 
 # ── 3) Sidebar: Input-Dateien & Systemparameter ─────────────────────────────
+st.sidebar.markdown("---")
 st.sidebar.markdown("### Datei-Uploads")
 price_file = st.sidebar.file_uploader(
     "Strommarktpreise hochladen\n(1. Spalte Zeitstempel, 2. Spalte Preis €/MWh)",
@@ -30,13 +31,13 @@ pv_file = st.sidebar.file_uploader(
     "PV-Lastgang hochladen\n(1. Spalte Zeitstempel, 2. Spalte Einspeisung kWh)",
     type=["csv", "xls", "xlsx"], key="pv_file"
 )
-
+st.sidebar.markdown("---")
 st.sidebar.markdown("### Eingaben")
 start_soc  = st.sidebar.number_input("Start-SoC (kWh)",       0.0, 1e6, 0.0, step=1.0)
 cap        = st.sidebar.number_input("Kapazität (kWh)",       0.0, 1e6, 4472.0, step=1.0)
 bat_kw     = st.sidebar.number_input("Batterieleistung (kW)", 0.0, 1e6, 559.0, step=1.0)
 grid_kw    = st.sidebar.number_input("Netzanschlussleistung (kW)", 0.0, 1e6, 757.5, step=1.0)
-eff_pct = st.sidebar.slider(
+eff_pct = st.sidebar.number_input(
     "Round-Trip Efficiency (%)",
     min_value=0.0,
     max_value=100.0,
