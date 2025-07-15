@@ -6,7 +6,7 @@ from io import BytesIO
 
 # ── 0) Seite konfigurieren ──────────────────────────────────────────────────
 st.set_page_config(layout="wide")
-st.title("BESS-Vermarktungserlöse")
+st.title("UBESS-Vermarktungserlöse")
 
 # ── 1) Session-State initialisieren ─────────────────────────────────────────
 if "run" not in st.session_state:
@@ -117,7 +117,7 @@ def set_progress(pct: int):
 set_progress(0)
 
 # ── 9) Solver-Funktion ──────────────────────────────────────────────────────
-def solve_arbitrage(pv_vec, pct_target):
+def solve_arbitrage(pv_vec, start_pct, end_pct):
     model = pulp.LpProblem("BESS_Arbitrage", pulp.LpMaximize)
     c_on   = pulp.LpVariable.dicts("c_on", range(T), cat="Binary")
     d_on   = pulp.LpVariable.dicts("d_on", range(T), cat="Binary")
@@ -140,11 +140,17 @@ def solve_arbitrage(pv_vec, pct_target):
         prev = start_soc if t == 0 else SoC[t-1]
         model += SoC[t] == prev + eff * charge[t] - discharge[t] / eff
 
+        frac = (t + 1) / T
+        pct  = start_pct + int((end_pct - start_pct) * frac)
+        set_progress(pct)
+
     model += pulp.lpSum((charge[t] + discharge[t]) / (2 * cap) for t in range(T)) <= max_cycles
 
     solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=120)
     model.solve(solver)
-    set_progress(pct_target)
+
+    # sicherheitshalber auf end_pct springen
+    set_progress(end_pct)
 
     obj = pulp.value(model.objective) or 0.0
     ch  = np.array([charge[t].value() for t in range(T)])
@@ -154,9 +160,10 @@ def solve_arbitrage(pv_vec, pct_target):
 
 # ── 10) Mit & ohne PV optimieren ─────────────────────────────────────────────
 with st.spinner("Berechne mit PV…"):
-    obj_w, ch_w, dh_w, soc_w = solve_arbitrage(pv_use, pct_target=50)
+    obj_w, ch_w, dh_w, soc_w = solve_arbitrage(pv_use, 0, 50)
+
 with st.spinner("Berechne ohne PV…"):
-    obj_n, ch_n, dh_n, soc_n = solve_arbitrage(np.zeros(T), pct_target=90)
+    obj_n, ch_n, dh_n, soc_n = solve_arbitrage(np.zeros(T), 50, 90)
 set_progress(100)
 
 # ── 11) Kennzahlen ──────────────────────────────────────────────────────────
