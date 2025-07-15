@@ -13,6 +13,7 @@ if "run" not in st.session_state:
     st.session_state.run = False
 
 # ── 2) Sidebar: Simulation & Reset ──────────────────────────────────────────
+st.sidebar.markdown("### Datei-Uploads")
 if st.sidebar.button("▶️ Simulation starten"):
     st.session_state.run = True
 if st.sidebar.button("🔄 Neue Eingabe"):
@@ -208,9 +209,9 @@ daily_sum["Kum. ohne PV"] = daily_sum["ohne PV"].cumsum()
 daily_sum["Kum. mit PV"]  = daily_sum["mit PV"].cumsum()
 
 # 4) Chart ausgeben
-st.subheader("Kumulierte Tageserlöse")
+st.subheader("Kumulierte Erlöse")
 st.line_chart(
-    daily_sum[["Kum. ohne PV", "Kum. mit PV"]],
+    daily_sum[["BESS-Erlöse ohne PV", "BESS-Erlöse mit PV"]],
     height=400,
     use_container_width=True
 )
