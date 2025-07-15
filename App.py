@@ -193,13 +193,17 @@ df_daily = pd.DataFrame({
 
 # 3) Summe pro Tag und kumulativ
 daily_sum = df_daily.groupby("Datum").sum().sort_index()
-daily_sum["Kum. ohne PV"] = daily_sum["ohne PV"].cumsum()
-daily_sum["Kum. mit PV"]  = daily_sum["mit PV"].cumsum()
+daily_sum.rename(columns={
+    "ohne PV": "Erlös ohne PV",
+    "mit PV":  "Erlös mit PV"
+}, inplace=True)
+daily_sum["Kum. Erlös ohne PV"] = daily_sum["Erlös ohne PV"].cumsum()
+daily_sum["Kum. Erlös mit PV"]  = daily_sum["Erlös mit PV"].cumsum()
 
 # 4) Chart ausgeben
 st.subheader("Kumulierte Erlöse")
 st.line_chart(
-    daily_sum[["BESS-Erlöse ohne PV", "BESS-Erlöse mit PV"]],
+    daily_sum[["Kum. Erlös ohne PV", "Kum. Erlös mit PV"]],
     height=400,
     use_container_width=True
 )
