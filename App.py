@@ -3,6 +3,25 @@ import pandas as pd
 import numpy as np
 import pulp
 from io import BytesIO
+import matplotlib.ticker as mticker
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+import locale
+
+# setze deutsches Locale (funktioniert nur, wenn auf deinem System installiert)
+try:
+    locale.setlocale(locale.LC_ALL, "de_DE.UTF-8")
+except locale.Error:
+    # falls nicht verfügbar, machen wir es manuell:
+    def fmt_euro(x):
+        s = f"{x:,.2f}" \
+            .replace(",", "X") \
+            .replace(".", ",") \
+            .replace("X", ".")
+        return s + " €"
+else:
+    def fmt_euro(x):
+        return locale.currency(x, symbol=True, grouping=True)
 
 # ── 0) Seite konfigurieren ──────────────────────────────────────────────────
 st.set_page_config(layout="wide")
@@ -185,13 +204,13 @@ set_progress(100)
 loss_abs = obj_n - obj_w
 loss_pct = abs(loss_abs) / obj_n * 100 if obj_n != 0 else 0.0
 c1, c2, c3 = st.columns(3)
-c1.metric("Gewinn ohne PV", f"€{obj_n:,.2f}")
-c2.metric("Gewinn mit PV",   f"€{obj_w:,.2f}")
+c1.metric("Gewinn ohne PV", fmt_euro(obj_n))
+c2.metric("Gewinn mit PV",   fmt_euro(obj_w))
 c3.metric(
-    "Verlust durch PV",
-    f"-€{abs(loss_abs):,.2f}",
-    f"{-loss_pct:.2f} %",
-    delta_color="inverse"
+"Verlust durch PV",
+"-" + fmt_euro(abs(loss_abs)),
+f"{-loss_pct:,.2f} %",
+delta_color="inverse"
 )
 
 # ── 10) Chart: Kumulierte Tageserlöse ───────────────────────────────────────
@@ -207,12 +226,30 @@ daily_sum = df_daily.groupby("Datum").sum().sort_index()
 daily_sum["Kum. ohne PV"] = daily_sum["ohne PV"].cumsum()
 daily_sum["Kum. mit PV"]  = daily_sum["mit PV"].cumsum()
 
-st.subheader("Kumulierte Tageserlöse")
-st.line_chart(
-    daily_sum[["Kum. ohne PV","Kum. mit PV"]],
-    height=400,
-    use_container_width=True
+st.subheader("Kumulierte Erlöse")
+
+fig, ax = plt.subplots(figsize=(8, 4))
+
+# Linien
+ax.plot(daily_sum.index, daily_sum["Kum. Erlös ohne PV"], label="ohne PV")
+ax.plot(daily_sum.index, daily_sum["Kum. Erlös mit PV"],  label="mit PV")
+
+# Y-Achse: Euro-Format
+ax.set_ylabel("€")
+ax.yaxis.set_major_formatter(
+    mticker.FuncFormatter(lambda x, _:
+        fmt_euro(x).replace(" €", "")  # fmt_euro hängt das € dran, wir wollen hier nur die Zahl + Symbol in y-Achsen-Label
+    )
 )
+
+# X-Achse: nur Monatsnamen auf Deutsch
+ax.xaxis.set_major_locator(mdates.MonthLocator())
+ax.xaxis.set_major_formatter(mdates.DateFormatter("%b", locale="de_DE.UTF-8"))
+
+# Layout
+fig.autofmt_xdate()
+ax.legend()
+st.pyplot(fig)
 
 # ── 11) Ergebnis-Tabelle & Download ─────────────────────────────────────────
 loss_factor = 1 - eff_pct**0.5
