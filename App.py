@@ -140,7 +140,6 @@ if st.sidebar.button("▶️ Simulation starten"):
         )
 
 # ── 6) Datei-Uploads & Eingaben ───────────────────────────────────────────────
-st.sidebar.markdown("---")
 st.sidebar.markdown("### Datei-Uploads")
 st.session_state.price_file = st.sidebar.file_uploader(
     "Strommarkt-Preise (Zeit, Preis €/MWh)", type=["csv","xls","xlsx"]
