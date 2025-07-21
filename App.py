@@ -152,7 +152,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### Eingaben")
 st.session_state.start_soc  = st.sidebar.number_input("Start-SoC (kWh)", 0.0, 1e6, 0.0, step=1.0)
 st.session_state.cap        = st.sidebar.number_input("Kapazität (kWh)", 0.0, 1e6, 4472.0, step=1.0)
-st.session_state.bat_kw     = st.sidebar.number_input("Batterie (kW)",   0.0, 1e6, 559.0, step=1.0)
+st.session_state.bat_kw     = st.sidebar.number_input("Batterieleistung (kW)",   0.0, 1e6, 559.0, step=1.0)
 st.session_state.grid_kw    = st.sidebar.number_input("Netzanschluss (kW)",0.0,1e6,757.5,step=1.0)
 st.session_state.eff_pct    = st.sidebar.number_input(
     "Round-Trip Eff. (%)", 0.0,100.0,91.0,step=0.1,format="%.1f"
