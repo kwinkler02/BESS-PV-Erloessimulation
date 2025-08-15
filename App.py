@@ -177,6 +177,50 @@ if "results" not in st.session_state:
     st.stop()
 
 # ── 8) Ergebnisse entpacken ──────────────────────────────────────────────────
+res = st.session_state.results
+
+# Backward-Kompatibilität: alte Ergebnis-Form (ohne SoC) automatisch migrieren
+if isinstance(res, (list, tuple)) and len(res) == 10:
+    (
+        timestamps, prices_mwh, pv_feed,
+        obj_w, ch_w, dh_w,
+        obj_n, ch_n, dh_n,
+        interval_h
+    ) = res
+
+    # SoC aus Lade-/Entladeströmen nachrechnen
+    eff = st.session_state.eff_pct**0.5
+    start_soc_local = st.session_state.start_soc
+
+    T = len(ch_w)
+    soc_w = np.zeros(T)
+    soc_n = np.zeros(T)
+
+    prev = start_soc_local
+    for t in range(T):
+        soc_w[t] = prev + eff*ch_w[t] - dh_w[t]/eff
+        prev = soc_w[t]
+
+    prev = start_soc_local
+    for t in range(T):
+        soc_n[t] = prev + eff*ch_n[t] - dh_n[t]/eff
+        prev = soc_n[t]
+
+    # Ergebnisstruktur auf neue Form (mit SoC) anheben
+    st.session_state.results = (
+        timestamps, prices_mwh, pv_feed,
+        obj_w, ch_w, dh_w, soc_w,
+        obj_n, ch_n, dh_n, soc_n,
+        interval_h
+    )
+
+elif isinstance(res, (list, tuple)) and len(res) == 12:
+    # bereits neue Struktur
+    pass
+else:
+    st.warning("Inkompatible Ergebnisstruktur. Bitte Simulation erneut starten.")
+    st.stop()
+
 (
     timestamps, prices_mwh, pv_feed,
     obj_w, ch_w, dh_w, soc_w,
