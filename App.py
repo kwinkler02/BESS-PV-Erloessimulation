@@ -264,7 +264,6 @@ months = [d.strftime("%b") for d in dfm.index]
 
 # Differenzen berechnen
 loss = (dfm["ohne PV"] - dfm["mit PV"]).clip(lower=0)  # Verlust durch PV
-gain = (dfm["mit PV"] - dfm["ohne PV"]).clip(lower=0)  # Mehrerlös durch PV
 
 fig1, ax1 = plt.subplots(figsize=(9, 4))
 
@@ -276,6 +275,17 @@ ax1.bar(pos, loss, width=width, bottom=dfm["mit PV"], label="Differenz (ohne−m
 
 # Legende (nur die zwei gewünschten Reihen)
 ax1.legend(loc="upper left")
+
+# X-Achse: Monatskürzel anzeigen
+ax1.set_xticks(pos)
+ax1.set_xticklabels(months)
+
+# Y-Achse formatieren (€, Tausenderpunkte) + Raster
+ax1.yaxis.set_major_locator(mticker.MultipleLocator(1_000))
+ax1.yaxis.set_major_formatter(
+    mticker.FuncFormatter(lambda x, _: f"{int(x):,d}".replace(",",".")+" €")
+)
+ax1.grid(axis="y", linestyle="--", alpha=0.3, zorder=0)
 
 st.pyplot(fig1, use_container_width=True)
 
