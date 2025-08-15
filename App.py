@@ -260,7 +260,8 @@ st.subheader("Erlöse (monatsweise)")
 # Monatswerte (ohne/mit) sind in dfm
 pos   = np.arange(len(dfm))
 width = 0.7
-months = [d.strftime("%b") for d in dfm.index]
+german_months = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"]
+months = [german_months[d.month-1] for d in dfm.index]
 
 # Differenzen berechnen
 loss = (dfm["ohne PV"] - dfm["mit PV"]).clip(lower=0)  # Verlust durch PV
