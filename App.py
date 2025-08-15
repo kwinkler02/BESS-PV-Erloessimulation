@@ -256,21 +256,37 @@ dfm = (
 dfm.index = dfm.index.to_timestamp()
 
 st.subheader("Erlöse (monatsweise)")
-fig1, ax1 = plt.subplots(figsize=(8, 3))
-ax1.plot(dfm.index, dfm["ohne PV"], label="ohne PV")
-ax1.plot(dfm.index, dfm["mit PV"],  label="mit PV")
 
+# Monatswerte (ohne/mit) sind in dfm
+pos   = np.arange(len(dfm))
+width = 0.7
+months = [d.strftime("%b") for d in dfm.index]
+
+# Differenzen berechnen
+loss = (dfm["ohne PV"] - dfm["mit PV"]).clip(lower=0)  # Verlust durch PV
+gain = (dfm["mit PV"] - dfm["ohne PV"]).clip(lower=0)  # Mehrerlös durch PV
+
+fig1, ax1 = plt.subplots(figsize=(9, 4))
+
+# Basis: mit PV (orange)
+ax1.bar(pos, dfm["mit PV"], width=width, label="mit PV", color="#f28e2b", zorder=3)
+
+# Oben drauf: rote Kappe = Differenz (ohne − mit), so dass Spitze = ohne PV
+ax1.bar(pos, loss, width=width, bottom=dfm["mit PV"], label="Differenz (ohne−mit)", color="#e15759", zorder=3)
+
+# Falls Mehrerlös: grüne Kappe ab der Höhe 'ohne PV'
+ax1.bar(pos, gain, width=width, bottom=dfm["ohne PV"], label="Mehrerlös (mit−ohne)", color="#59a14f", zorder=3)
+
+# Optional: Kontur für 'ohne PV' als Referenz
+ax1.bar(pos, dfm["ohne PV"], width=width, fill=False, edgecolor="#4e4e4e", linewidth=1.2, label="ohne PV (Kontur)", zorder=2)
+
+# Achsen & Format
+ax1.set_xticks(pos, months, rotation=0)
 ax1.yaxis.set_major_locator(mticker.MultipleLocator(1_000))
-ax1.yaxis.set_major_formatter(
-    mticker.FuncFormatter(lambda x, _: f"{int(x):,d}".replace(",",".")+" €")
-)
-ax1.grid(axis="y", linestyle="--", alpha=0.3)
-
-ax1.xaxis.set_major_locator(mdates.MonthLocator())
-ax1.xaxis.set_major_formatter(mdates.DateFormatter("%b"))
-
-fig1.autofmt_xdate()
+ax1.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,d}".replace(",",".")+" €"))
+ax1.grid(axis="y", linestyle="--", alpha=0.3, zorder=0)
 ax1.legend(loc="upper left")
+
 st.pyplot(fig1, use_container_width=True)
 
 # ── 11) Chart 2: Kumulierte Erlöse ──────────────────────────────────────────
