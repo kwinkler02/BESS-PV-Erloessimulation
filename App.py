@@ -65,7 +65,7 @@ def compute_results(price_file, pv_file,
         st.stop()
 
     # -- 3.2) Parameter & Limits --
-    prices     = prices_mwh / 1000.0
+    prices     = prices_mwh / 1000.0  # €/kWh
     interval_h = 0.25
     batt_max   = bat_kw   * interval_h
     grid_max   = grid_kw  * interval_h
@@ -74,49 +74,61 @@ def compute_results(price_file, pv_file,
     # -- 3.3) Solve inklusive progress_callback --
     def solve(pv_vec):
         m = pulp.LpProblem("BESS", pulp.LpMaximize)
-        c  = pulp.LpVariable.dicts("c",  range(T), cat="Binary")
-        d  = pulp.LpVariable.dicts("d",  range(T), cat="Binary")
-        ch = pulp.LpVariable.dicts("ch", range(T), lowBound=0, upBound=batt_max)
-        dh = pulp.LpVariable.dicts("dh", range(T), lowBound=0, upBound=batt_max)
-        soc= pulp.LpVariable.dicts("soc",range(T), lowBound=0, upBound=cap)
+        c   = pulp.LpVariable.dicts("c",   range(T), cat="Binary")
+        d   = pulp.LpVariable.dicts("d",   range(T), cat="Binary")
+        ch  = pulp.LpVariable.dicts("ch",  range(T), lowBound=0, upBound=batt_max)
+        dh  = pulp.LpVariable.dicts("dh",  range(T), lowBound=0, upBound=batt_max)
+        soc = pulp.LpVariable.dicts("soc", range(T), lowBound=0, upBound=cap)
 
+        # Zielfunktion: Erlöse maximieren
         m += pulp.lpSum(prices[t]*dh[t] - prices[t]*ch[t] for t in range(T))
-        eff = eff_pct**0.5
+
+        eff = eff_pct**0.5  # hin/ruck jeweils sqrt(RTE)
 
         for t in range(T):
+            # Keine gleichzeitige Lade-/Entlade-Aktivität
             m += c[t] + d[t] <= 1
+
+            # Power-Limits + Mindestaktivität (verhindert infinitesimale Flüsse)
             m += ch[t] <= batt_max * c[t]
             m += ch[t] >= interval_h * c[t]
             m += dh[t] <= batt_max * d[t]
             m += dh[t] >= interval_h * d[t]
+
+            # Netzanschlusslimit inkl. PV
             m += pv_vec[t] + ch[t] + dh[t] <= grid_max
-            prev = start_soc if t==0 else soc[t-1]
+
+            # SoC-Dynamik
+            prev = start_soc if t == 0 else soc[t-1]
             m += soc[t] == prev + eff*ch[t] - dh[t]/eff
 
-            # fein granularen Fortschritt melden
+            # Fortschritt im Build der Constraints
             if progress_callback and (t % max(1, T//50) == 0):
                 pct = 5 + int(45 * t / T)
                 progress_callback(pct)
 
-        m += pulp.lpSum((ch[t]+dh[t])/(2*cap) for t in range(T)) <= max_cycles
+        # Zyklenbudget (Jahresbudget auf die simulierte Zeit angewandt)
+        m += pulp.lpSum((ch[t] + dh[t])/(2*cap) for t in range(T)) <= max_cycles
 
-        # vor dem Solve 50%
+        # Solve
         if progress_callback: progress_callback(50)
         pulp.PULP_CBC_CMD(msg=False, timeLimit=120).solve(m)
-        # nach dem Solve 90%
         if progress_callback: progress_callback(90)
 
-        obj  = pulp.value(m.objective) or 0.0
-        ch_v = np.array([ch[t].value() for t in range(T)])
-        dh_v = np.array([dh[t].value() for t in range(T)])
-        return obj, ch_v, dh_v
+        obj   = pulp.value(m.objective) or 0.0
+        ch_v  = np.array([ch[t].value()  for t in range(T)])
+        dh_v  = np.array([dh[t].value()  for t in range(T)])
+        soc_v = np.array([soc[t].value() for t in range(T)])  # ⬅️ SoC auslesen
+        return obj, ch_v, dh_v, soc_v
 
     # -- 3.4) Ausführen und End-Progress setzen --
-    obj_w, ch_w, dh_w = solve(pv_use)
-    obj_n, ch_n, dh_n = solve(np.zeros(T))
+    obj_w, ch_w, dh_w, soc_w = solve(pv_use)
+    obj_n, ch_n, dh_n, soc_n = solve(np.zeros(T))
     if progress_callback: progress_callback(100)
     return (timestamps, prices_mwh, pv_feed,
-            obj_w, ch_w, dh_w, obj_n, ch_n, dh_n, interval_h)
+            obj_w, ch_w, dh_w, soc_w,
+            obj_n, ch_n, dh_n, soc_n,
+            interval_h)
 
 # ── 4) Streamlit-Seite starten ───────────────────────────────────────────────
 st.set_page_config(layout="wide")
@@ -167,8 +179,8 @@ if "results" not in st.session_state:
 # ── 8) Ergebnisse entpacken ──────────────────────────────────────────────────
 (
     timestamps, prices_mwh, pv_feed,
-    obj_w, ch_w, dh_w,
-    obj_n, ch_n, dh_n,
+    obj_w, ch_w, dh_w, soc_w,
+    obj_n, ch_n, dh_n, soc_n,
     interval_h
 ) = st.session_state.results
 
@@ -181,7 +193,7 @@ c2.metric("Gewinn mit PV",   fmt_euro(obj_w))
 c3.metric(
     "Verlust durch PV",
     "-" + fmt_euro(abs(loss_abs)),
-    f"{-loss_pct:.2f} %",
+    f"{ -loss_pct:.2f} %",
     delta_color="normal"
 )
 
@@ -194,8 +206,7 @@ dfm = (
         "ohne PV": rev_n,
         "mit PV":  rev_w
     })
-    .groupby(lambda i: timestamps.dt.floor("D")[i].to_period("M"))
-    [["ohne PV","mit PV"]]
+    .groupby(lambda i: timestamps.dt.floor("D")[i].to_period("M"))[["ohne PV","mit PV"]]
     .sum()
 )
 dfm.index = dfm.index.to_timestamp()
@@ -225,7 +236,7 @@ cum = (
         "ohne PV": rev_n,
         "mit PV":  rev_w
     })
-    .groupby("Datum")[["ohne PV","mit PV"]]
+    .groupby("Datum")[ ["ohne PV","mit PV"] ]
     .sum()
     .sort_index()
     .cumsum()
@@ -253,18 +264,20 @@ st.pyplot(fig2, use_container_width=True)
 loss_factor = 1 - st.session_state.eff_pct**0.5
 cycles_w    = (ch_w + dh_w)/(2*st.session_state.cap)
 out = pd.DataFrame({
-    "Zeitstempel":         timestamps,
-    "Preis (€/MWh)":       prices_mwh,
-    "PV-Einspeisung (kWh)":pv_feed,
-    "PV-genutzt (kWh)":    np.minimum(pv_feed, st.session_state.grid_kw*interval_h),
-    "Ladeaktiv":           (ch_w>0).astype(int),
-    "Entladeaktiv":        (dh_w>0).astype(int),
-    "Lade-kWh":            ch_w,
-    "Entlade-kWh":         dh_w,
-    "Verlust (kWh)":       -(ch_w+dh_w)*loss_factor,
-    "Kum. Zyklen":         np.cumsum(cycles_w),
-    "Netzlast (kWh)":      np.minimum(pv_feed, st.session_state.grid_kw*interval_h)+ch_w+dh_w
+    "Zeitstempel":           timestamps,
+    "Preis (€/MWh)":         prices_mwh,
+    "PV-Einspeisung (kWh)":  pv_feed,
+    "PV-genutzt (kWh)":      np.minimum(pv_feed, st.session_state.grid_kw*interval_h),
+    "Ladeaktiv":             (ch_w>0).astype(int),
+    "Entladeaktiv":          (dh_w>0).astype(int),
+    "Lade-kWh":              ch_w,
+    "Entlade-kWh":           dh_w,
+    "SoC (kWh)":             soc_w,  # ⬅️ NEU: SoC in kWh
+    "Verlust (kWh)":         -(ch_w+dh_w)*loss_factor,
+    "Kum. Zyklen":           np.cumsum(cycles_w),
+    "Netzlast (kWh)":        np.minimum(pv_feed, st.session_state.grid_kw*interval_h) + ch_w + dh_w
 })
+
 st.dataframe(out, height=400, use_container_width=True)
 
 buf = BytesIO()
