@@ -345,7 +345,7 @@ out = pd.DataFrame({
     "SoC (kWh)":             soc_w,  # ⬅️ NEU: SoC in kWh
     "Verlust (kWh)":         -(ch_w+dh_w)*loss_factor,
     "Kum. Zyklen":           np.cumsum(cycles_w),
-    "Netzlast (kWh)":        np.minimum(pv_feed, st.session_state.grid_kw*interval_h) + ch_w + dh_w
+    "Netzlast (kWh)": np.minimum(pv_feed, st.session_state.grid_kw*interval_h) - ch_w + dh_w
 })
 
 st.dataframe(out, height=400, use_container_width=True)
