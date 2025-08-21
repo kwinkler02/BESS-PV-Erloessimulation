@@ -29,7 +29,8 @@ except locale.Error:
 def compute_results(price_file, pv_file,
                     start_soc, cap, bat_kw, grid_kw,
                     eff_pct, max_cycles,
-                    progress_callback):
+                    progress_callback,
+                    baseline_no_grid=False):
     # -- 3.1) Data-Loader --
     def load_price_df(upl):
         if upl.name.lower().endswith(".csv"):
@@ -72,7 +73,7 @@ def compute_results(price_file, pv_file,
     pv_use     = np.minimum(pv_feed, grid_max)
 
     # -- 3.3) Solve inklusive progress_callback --
-    def solve(pv_vec):
+    def solve(pv_vec, enforce_grid=True):
         m = pulp.LpProblem("BESS", pulp.LpMaximize)
         c   = pulp.LpVariable.dicts("c",   range(T), cat="Binary")
         d   = pulp.LpVariable.dicts("d",   range(T), cat="Binary")
@@ -95,8 +96,9 @@ def compute_results(price_file, pv_file,
             m += dh[t] <= batt_max * d[t]
             m += dh[t] >= interval_h * d[t]
 
-            # Netzanschlusslimit inkl. PV
-            m += pv_vec[t] + ch[t] + dh[t] <= grid_max
+            # Netzanschlusslimit inkl. PV (optional)
+            if enforce_grid:
+                m += pv_vec[t] + ch[t] + dh[t] <= grid_max
 
             # SoC-Dynamik
             prev = start_soc if t == 0 else soc[t-1]
@@ -122,8 +124,8 @@ def compute_results(price_file, pv_file,
         return obj, ch_v, dh_v, soc_v
 
     # -- 3.4) Ausführen und End-Progress setzen --
-    obj_w, ch_w, dh_w, soc_w = solve(pv_use)
-    obj_n, ch_n, dh_n, soc_n = solve(np.zeros(T))
+    obj_w, ch_w, dh_w, soc_w = solve(pv_use, enforce_grid=True)
+    obj_n, ch_n, dh_n, soc_n = solve(np.zeros(T), enforce_grid=not baseline_no_grid)
     if progress_callback: progress_callback(100)
     return (timestamps, prices_mwh, pv_feed,
             obj_w, ch_w, dh_w, soc_w,
@@ -148,7 +150,8 @@ if st.sidebar.button("▶️ Simulation starten"):
             grid_kw      = st.session_state.grid_kw,
             eff_pct      = st.session_state.eff_pct,
             max_cycles   = st.session_state.max_cycles,
-            progress_callback = set_progress
+            progress_callback = set_progress,
+            baseline_no_grid = st.session_state.baseline_no_grid
         )
 
 # ── 6) Datei-Uploads & Eingaben ───────────────────────────────────────────────
@@ -170,6 +173,12 @@ st.session_state.eff_pct    = st.sidebar.number_input(
     "Round-Trip Eff. (%)", 0.0,100.0,91.0,step=0.1,format="%.1f"
 ) / 100.0
 st.session_state.max_cycles = st.sidebar.number_input("Zyklen/Jahr",0.0,1e4,548.0,step=1.0)
+
+# Idealisiertes Baseline-Setup
+st.session_state.baseline_no_grid = st.sidebar.checkbox(
+    "Baseline ohne Netzlimit (idealisiert)", value=False,
+    help="Vergleich ohne Netzanschluss-Constraint; PV-Lauf bleibt mit Netzlimit."
+)
 
 # ── 7) Warten bis Simulation läuft ───────────────────────────────────────────
 if "results" not in st.session_state:
